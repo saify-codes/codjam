@@ -1,7 +1,52 @@
-import random,os
+import random,os,re
 from tkinter import *
 from tkinter import ttk, messagebox
 from PIL import Image, ImageTk
+from tkcalendar import Calendar
+from datetime import datetime
+
+def datepicker(src):
+  def cal():
+    def get():
+      global CURR_DATE
+      CURR_DATE = calender.get_date()
+      screen.destroy()
+    screen = Toplevel(src)
+    screen.config(bg="white")
+    now = datetime.now()
+    day = int(now.strftime("%d"))
+    mon = int(now.strftime("%m"))
+    year= int(now.strftime("%Y"))
+    calender = Calendar(screen, selectmode = 'day',year = year, month = mon,day = day)
+    calender.pack()
+    Button(screen,text="Select date", bg="crimson",fg="white",relief="flat",command=get).pack(pady=10,ipadx=5)
+  screen = Frame(src)
+  screen.config(bg="white")
+  Label(screen,text="MM-DD-YYYY:",background="white").grid(row=0,column=0,padx=0)
+  Button(screen,text="Pick date",relief="flat",bg="purple",fg="white",command=cal,width=10).grid(row=0,column=1,sticky=E,padx=13)
+  return screen
+
+def update_amount(id):
+  with open("passengers/"+id+'.txt') as file:
+    string = file.read()
+    cut = re.search("\d+\$$",string).span()
+    amount = string[cut[0]:cut[1]-1]
+    with open("info/amount.log",'r') as file:
+      global total_amount
+      total_amount = file.readline()
+    with open("info/amount.log",'w') as file:
+      total_amount = int(total_amount) - int(amount)
+      TOTAL_AMOUNT.config(text=str(total_amount)+'$')
+      file.write(str(total_amount))
+
+def update_passengerlist(id):
+  with open("info/passengerslist.log",'r') as file:
+    array = []
+    for x in file:
+      if not x.find(id) > 0:
+        array.append(x)
+    with open('info/passengerslist.log','w') as file:
+        file.writelines(array)
 
 def listPassengers():
   global screen4
@@ -22,6 +67,10 @@ def btn():
   return screen
 
 def status():
+    global TOTAL_BOOKING
+    global TOTAL_AMOUNT
+    global TOTAL_CANCELLED_FLIGHTS
+
     fp = open("info/bookings.log","r")
     number_of_bookings = fp.readline()
     fp.close()
@@ -35,17 +84,20 @@ def status():
     screen = Frame(screen3,bg="white")
     List = Frame(screen,bg="white")
     Label(List, text="Total bookings", bg="white",font=("poppins",10,"bold")).pack(side=LEFT)
-    Label(List, text=number_of_bookings, bg="white").pack(side=LEFT, anchor=E,expand=True)
+    TOTAL_BOOKING = Label(List, text=number_of_bookings, bg="white")
+    TOTAL_BOOKING.pack(side=LEFT, anchor=E,expand=True)
     List.pack(padx=25,expand=True,fill=X)
 
     List2 = Frame(screen,bg="white")
     Label(List2, text="Total Amount", bg="white",font=("poppins",10,"bold")).pack(side=LEFT)
-    Label(List2, text=amount+'$', bg="white").pack(side=LEFT, anchor=E,expand=True)
+    TOTAL_AMOUNT = Label(List2, text=amount+'$', bg="white")
+    TOTAL_AMOUNT.pack(side=LEFT, anchor=E,expand=True)
     List2.pack(padx=25,expand=True,fill=X)
 
     List3 = Frame(screen,bg="white")
     Label(List3, text="Cancelled Flights", bg="white",font=("poppins",10,"bold")).pack(side=LEFT)
-    Label(List3, text=cancelled_flights, bg="white").pack(side=LEFT, anchor=E,expand=True)
+    TOTAL_CANCELLED_FLIGHTS = Label(List3, text=cancelled_flights, bg="white")
+    TOTAL_CANCELLED_FLIGHTS.pack(side=LEFT, anchor=E,expand=True)
     List3.pack(padx=25,expand=True,fill=X)
 
     List4 = Frame(screen,bg="red")
@@ -53,7 +105,7 @@ def status():
     List4.pack(padx=25,expand=True,fill=X,pady=30)
     return screen
 
-def airline(session=False):
+def airline():
   global screen3
   screen2.destroy()
   screen3 = Toplevel(screen)
@@ -73,18 +125,27 @@ def cancel_flight():
   screen = Toplevel(screen3)
   screen.title("flight Cancellation")
   screen.geometry("300x250")
-  Label(screen,text="Flight ID").grid(row=0,column=0,sticky=W,padx=10)
+  screen.config(bg="white")
+  Label(screen,text="Flight ID", bg="white").grid(row=0,column=0,sticky=W,padx=10)
   fi = Entry(screen, textvariable=flight)
   fi.grid(row=0,column=1)
+
   def cancel():
       global cancelled_flights
-      os.remove(flight.get()+'.txt')
       Label(screen,text="Flight Cancelled",fg="red",bg="yellow")
-      with open("info/cancelled flight.log",'r') as file:
-        cancelled_flights = int(file.readline())
-      with open("info/cancelled flight.log",'w') as file:
-        file.write(str(cancelled_flights+1))
-  Button(screen,text="cancel booking",command=cancel).grid(row=1,column=0,pady=10,padx=10,sticky=W)
+      if os.path.isfile("passengers/"+flight.get()+'.txt'):
+        with open("info/cancelled flight.log",'r') as file:
+          cancelled_flights = int(file.readline())
+        with open("info/cancelled flight.log",'w') as file:
+          TOTAL_CANCELLED_FLIGHTS.config(text=str(cancelled_flights+1))
+          file.write(str(cancelled_flights+1))
+        update_passengerlist(flight.get())
+        update_amount(flight.get())
+        os.remove("passengers/"+flight.get()+'.txt')
+        messagebox.showinfo("","Flight cancelled")
+      else:
+        messagebox.showinfo("","Invalid passenger ID")
+  Button(screen,text="cancel booking",relief="flat",bg="#BD2130",fg="white",command=cancel).grid(row=1,column=0,pady=10,padx=10,sticky=W)
 
 def flight_info():
   global screen3
@@ -97,11 +158,14 @@ def flight_info():
   fi = Entry(screen, textvariable=flight)
   fi.grid(row=0,column=1)
   def flight_details():
-    with open('passengers/'+flight.get()+'.txt','r') as file:
-        y_axis = 100
-        for x in file:
-            Label(screen,text=x, bg="white").place(x=10,y=y_axis)
-            y_axis+=30
+    if os.path.isfile("passengers/"+flight.get()+'.txt'):
+      with open('passengers/'+flight.get()+'.txt','r') as file:
+          y_axis = 100
+          for x in file:
+              Label(screen,text=x, bg="white").place(x=10,y=y_axis)
+              y_axis+=30
+    else:
+      messagebox.showinfo("","Record not found")
   Button(screen,text="Get details",bg="purple",width=10,fg="white",relief="flat",command=flight_details).grid(row=1,column=0,pady=10,padx=10,sticky=W)
 
 def book_flight():
@@ -112,20 +176,25 @@ def book_flight():
   name = StringVar()
   screen = Toplevel(screen3)
   screen.title("Book flight")
-  screen.geometry("300x250")
-  Label(screen,text="Select Flight").pack()
+  screen.geometry("300x300")
+  screen.config(bg="white")
+
+  Label(screen,text="Select Flight",bg="white").pack(padx=55,anchor=W)
   select = ttk.Combobox(screen, width = 27, textvariable = flight)
   select["values"] = ('PIA','Emirates','Blue sea')
-  select.pack()
-  Label(screen,text="Select Passenger name").pack()
-  pn = Entry(screen,textvariable=name)
-  pn.pack()
-  Label(screen,text="Select Travel date").pack()
-  td = Entry(screen,textvariable=travel_date)
-  td.pack()
-  Label(screen,text="Ticket price").pack()
-  tp = Entry(screen,textvariable=ticket_price)
-  tp.pack()
+  select.pack(pady=10)
+
+
+  Label(screen,text="Select Passenger name",bg="white").pack(padx=55,anchor=W)
+  pn = Entry(screen,textvariable=name,width=30)
+  pn.pack(pady=10)
+    
+  datepicker(screen).pack(pady=10)
+
+  Label(screen,text="Ticket price",bg="white").pack(padx=55,anchor=W)
+  tp = Entry(screen,textvariable=ticket_price,width=30)
+  tp.pack(pady=10)
+  Label(screen,text="",bg="white").pack()
   def book():
       global total_bookings
       global total_amount
@@ -134,7 +203,7 @@ def book_flight():
           file.write("ID: "+str(id)+'\n')
           file.write("Name: "+name.get()+'\n')
           file.write("Airline: "+flight.get()+'\n')
-          file.write("Travel date: "+travel_date.get()+'\n')
+          file.write("Travel date: "+CURR_DATE+'\n')
           file.write("Cost: "+ticket_price.get()+'$')
           messagebox.showinfo("","Successful")
           
@@ -144,17 +213,18 @@ def book_flight():
       with open("info/bookings.log","r") as file:
         total_bookings = int(file.readline())
       with open("info/bookings.log","w") as file:
+        TOTAL_BOOKING.config(text=str(total_bookings+1))
         file.write(str(total_bookings+1))
 
       with open("info/amount.log","r") as file:
         total_amount = int(file.readline())
       with open("info/amount.log","w") as file:
+        TOTAL_AMOUNT.config(text=str(total_amount+int(ticket_price.get()))+'$')
         file.write(str(total_amount+int(ticket_price.get())))
       pn.delete(0,END)
-      td.delete(0,END)
+      # td.delete(0,END)
       tp.delete(0,END)
-
-  Button(screen,text="Book",command=book).pack()
+  Button(screen,text="Book",command=book,relief="flat",background="#00d9ec",width=25,fg="white").pack()
 
 def register():
   global screen1
@@ -200,13 +270,15 @@ def login_user():
   username_info = username.get()
   password_info = password.get()
 
-  with open(username_info+".txt", "r") as file:
-      if password_info == file.readline():
-          airline()
-      else:
-          Label(screen2,text="", bg="white").pack()
-          # Label(screen2,text="Invalid password",fg="red", bg="white").pack()
-          messagebox.showinfo("","Password invalid")
+  if(os.path.isfile(username_info+".txt")):
+    with open(username_info+".txt", "r") as file:
+        if password_info == file.readline():
+            airline()
+        else:
+            Label(screen2,text="", bg="white").pack()
+            messagebox.showinfo("","Password invalid")
+  else:
+    messagebox.showinfo("","User invalid")
 
 def login():
   global screen2
@@ -252,4 +324,3 @@ def main_screen():
   screen.mainloop()
 
 main_screen()
-  

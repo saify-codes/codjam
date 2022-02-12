@@ -1,5 +1,0 @@
-ID: 77103
-Name: Anas
-Airline: Emirates
-Travel date: 1-2-2022
-Cost: 50000$
