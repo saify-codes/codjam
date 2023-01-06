@@ -1,5 +1,0 @@
-ID: 46868
-Name: Abrar
-Airline: Emirates
-Travel date: 2/24/22
-Cost: 3000$
